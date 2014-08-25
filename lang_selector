@@ -1,0 +1,117 @@
+<?php
+
+class LanguageSelector {
+    /**
+     * @return string
+     * Get the user's preferred language based on their browser preferences and what we
+     * support.
+     */
+    protected function getPreferredLanguage() {
+        if ($this->isLangCookieValid()) {
+            return $_COOKIE['pref_lang'];
+        } else {
+            return $this->getBrowserLangWeSupport();
+        }
+    }
+
+    /**
+     * @return bool
+     * Check to see if they have a cookie set with a valid language code.
+     */
+    protected function isLangCookieValid() {
+        return isset($_COOKIE['pref_lang']) &&
+                !empty($_COOKIE['pref_lang']) &&
+                $this->isSupported($_COOKIE['pref_lang']);
+    }
+
+    /**
+     * @param $lang
+     * @return bool
+     * Is the passed in language code supported?
+     */
+    protected function isSupported($lang) {
+        $langs = $this->getSupportedLangShortcodes();
+        if (array_key_exists($lang, $langs)) {
+            return true;
+        }
+        return false;
+    }
+
+    /**
+     * @return array|null
+     * Returns an array of the language codes we support.
+     */
+    protected function getSupportedLangShortcodes() {
+        $lang_resource = new Lang_resource_ext();
+        return $lang_resource->get_language_shortcodes();
+    }
+
+    /**
+     * @return string
+     * Get the user's browser languages and then find the first one that we support (in
+     * order of their highest to lowest preference).
+     */
+    protected function getBrowserLangWeSupport() {
+        foreach ($this->getSortedBrowserLangs() as $lang => $qval) {
+            if ($this->isSupported($lang)) {
+                return $lang;
+            }
+        }
+        return $this->defaultLang;
+    }
+
+    /**
+     * @return mixed
+     * Get an array of the user's browser language preferences.
+     */
+    protected function getSortedBrowserLangs() {
+        foreach ($this->getHttpPieces() as $piece) {
+            $this->setQValueAndLang($piece, $langs);
+        }
+        $this->sortLangsByQValue($langs);
+        return $langs;
+    }
+
+    /**
+     * @param $langs
+     *
+     */
+    protected function sortLangsByQValue(&$langs) {
+        arsort($langs);
+    }
+
+    /**
+     * @return array
+     * Get the HTTP Language Header sliced. It will separate the language codes and their
+     * associated Q-Values from their counterparts.
+     */
+    protected function getHttpPieces() {
+        return explode(",", $_SERVER["HTTP_ACCEPT_LANGUAGE"]);
+    }
+
+    /**
+     * @param $piece
+     * @param $langs
+     * Gets the QValue and Language Code for the specified piece of the HTTP Language Header.
+     * The Q-Value is set to 1.0 (in the else statement) if the Language Code doesn't have an
+     * associated Q-Value. Modern Browsers sometimes do not provide a Q-Value for the the
+     * user's most favored language selection--therefore it defaults to 1.0 (the highest Q-Value).
+     */
+    protected function setQValueAndLang($piece, &$langs) {
+        if(preg_match('#(.*);q=([0-1]?.[0-9]{0,4})#i',$piece,$matches)) {
+            $langs[$this->trimLangCode($matches[1])] = (float)$matches[2];
+        } else {
+            $langs[$this->trimLangCode($piece)] = 1.0;
+        }
+    }
+
+    /**
+     * @param $lang
+     * @return string
+     * Trims the superfluous country information that follows the Language Code.
+     */
+    protected function trimLangCode($lang) {
+        return substr($lang, 0, 2);
+    }
+
+}
